@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Dashboard | ANU Registration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="#">ANU Student Portal</a>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="catalog-tab" data-bs-toggle="tab" data-bs-target="#catalog" type="button">Course Catalog</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="mycourses-tab" data-bs-toggle="tab" data-bs-target="#mycourses" type="button" onclick="loadMyCourses()">My Courses & Schedule</button>
+        </li>
+    </ul>
+
+    <div id="alerts"></div>
+
+    <div class="tab-content" id="myTabContent">
+        
+        <div class="tab-pane fade show active" id="catalog">
+            <h4>Available Courses</h4>
+            <table class="table table-striped bg-white shadow-sm rounded">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Code</th>
+                        <th>Title</th>
+                        <th>Instructor</th> <th>Credits</th>
+                        <th>Schedule</th>
+                        <th>Seats</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="course-table-body"></tbody>
+            </table>
+        </div>
+
+        <div class="tab-pane fade" id="mycourses">
+            <h4>My Registered Schedule</h4>
+            <table class="table table-striped bg-white shadow-sm rounded">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Code</th><th>Title</th><th>Schedule</th><th>Status</th><th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="my-courses-body"></tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const token = localStorage.getItem('token');
+    if(!token) window.location.href = 'index.html';
+
+    // 1. Load Catalog
+    // 1. Load Catalog
+    document.addEventListener('DOMContentLoaded', async () => {
+        const response = await fetch('/api/courses');
+        const courses = await response.json();
+        const tbody = document.getElementById('course-table-body');
+        tbody.innerHTML = '';
+        
+        courses.forEach(course => {
+            const seatsLeft = course.capacity - course.enrolled_count;
+            const btnClass = seatsLeft > 0 ? 'btn-success' : 'btn-secondary disabled';
+            const btnText = seatsLeft > 0 ? 'Enroll' : 'Full';
+            
+            // Handle cases where the admin hasn't assigned an instructor yet
+            const instructorDisplay = course.instructor_name 
+                ? `${course.instructor_name}` 
+                : `<span class="text-muted fst-italic">TBA</span>`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${course.code}</strong></td>
+                    <td>${course.title}</td>
+                    <td>${instructorDisplay}</td>
+                    <td>${course.credits}</td>
+                    <td>${course.days} (${course.start_time})</td>
+                    <td>${seatsLeft} / ${course.capacity}</td>
+                    <td>
+                        <button class="btn ${btnClass} btn-sm" 
+                                onclick="enrollCourse(${course.schedule_id})"
+                                ${seatsLeft === 0 ? 'disabled' : ''}>
+                            ${btnText}
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    });
+
+    // 2. Enroll (BUG FIXED: No hardcoded student ID)
+    async function enrollCourse(scheduleId) {
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ schedule_id: scheduleId }) // Student ID is extracted securely from the token on the backend!
+        });
+        const result = await response.json();
+        const alertDiv = document.getElementById('alerts');
+        
+        if (response.ok) {
+            alertDiv.innerHTML = `<div class="alert alert-success">${result.message}</div>`;
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alertDiv.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+        }
+    }
+
+    // 3. Load My Courses
+    async function loadMyCourses() {
+        const response = await fetch('/api/my-courses', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const myCourses = await response.json();
+        const tbody = document.getElementById('my-courses-body');
+        tbody.innerHTML = ''; // clear previous
+
+        if(myCourses.length === 0) tbody.innerHTML = '<tr><td colspan="5" class="text-center">You have no registered courses.</td></tr>';
+
+        myCourses.forEach(course => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${course.code}</td><td>${course.title}</td><td>${course.days} ${course.start_time}</td>
+                    <td><span class="badge bg-success">${course.status}</span></td>
+                    <td><button class="btn btn-danger btn-sm" onclick="dropCourse(${course.registration_id})">Drop</button></td>
+                </tr>`;
+        });
+    }
+
+    // 4. Drop Course
+    async function dropCourse(registrationId) {
+        if(!confirm("Are you sure you want to drop this course?")) return;
+
+        const response = await fetch('/api/drop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ registration_id: registrationId })
+        });
+        
+        if (response.ok) {
+            loadMyCourses(); // Reload the table instantly
+            document.getElementById('alerts').innerHTML = `<div class="alert alert-warning">Course dropped successfully.</div>`;
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = 'index.html';
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard | ANU System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+        // FRONTEND SECURITY: Check token and role immediately
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = 'index.html';
+        
+        // Decode JWT to check role
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.role !== 'Admin') {
+            alert("Access Denied: Administrator privileges required.");
+            window.location.href = 'index.html'; 
+        }
+    </script>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <span class="navbar-brand mb-0 h1">Admin Control Panel</span>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    <ul class="nav nav-tabs mb-4" id="adminTabs">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#manage-courses">Manage Courses</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#manage-instructors" onclick="loadInstructorsList()">Manage Instructors</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#enrollments" onclick="loadEnrollments()">System Enrollments</button>
+        </li>
+    </ul>
+
+    <div id="admin-alerts"></div>
+
+    <div class="tab-content">
+        
+        <div class="tab-pane fade show active" id="manage-courses">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h5>Add New Course</h5></div>
+                <div class="card-body">
+                    <form id="addCourseForm" class="row g-3">
+                        <div class="col-md-3"><input type="text" class="form-control" id="code" placeholder="Code (e.g., CS-401)" required></div>
+                        <div class="col-md-5"><input type="text" class="form-control" id="title" placeholder="Course Title" required></div>
+                        <div class="col-md-2"><input type="number" class="form-control" id="credits" placeholder="Credits" required></div>
+                        <div class="col-md-2"><input type="number" class="form-control" id="capacity" placeholder="Capacity" required></div>
+                        <div class="col-md-3"><input type="text" class="form-control" id="semester" placeholder="Semester (e.g. Fall 2026)" required></div>
+                        <div class="col-md-3"><input type="text" class="form-control" id="days" placeholder="Days (e.g. Mon/Wed)" required></div>
+                        <div class="col-md-2"><input type="time" class="form-control" id="start_time" required></div>
+                        <div class="col-md-2"><input type="time" class="form-control" id="end_time" required></div>
+                        <div class="col-md-2"><button type="submit" class="btn btn-success w-100">Add Course</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <table class="table table-bordered bg-white shadow-sm">
+                <thead class="table-dark">
+                    <tr><th>Code</th><th>Title</th><th>Instructor</th><th>Capacity/Enrolled</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="admin-course-list"></tbody>
+            </table>
+        </div>
+
+        <div class="tab-pane fade" id="manage-instructors">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h5>Add New Instructor</h5></div>
+                <div class="card-body">
+                    <form id="addInstructorForm" class="row g-3">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="inst-title" placeholder="Full Name / Title (e.g., Dr. Sarah Lee)" required>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="email" class="form-control" id="inst-email" placeholder="University Email" required>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="password" class="form-control" id="inst-password" placeholder="Temporary Password" required>
+                        </div>
+                        <div class="col-md-1">
+                            <button type="submit" class="btn btn-success w-100">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <table class="table table-striped bg-white shadow-sm">
+                <thead class="table-dark">
+                    <tr><th>Instructor Name</th><th>Email</th><th>System ID</th></tr>
+                </thead>
+                <tbody id="instructors-list-table"></tbody>
+            </table>
+        </div>
+
+        <div class="tab-pane fade" id="enrollments">
+            <table class="table table-striped bg-white shadow-sm">
+                <thead class="table-primary">
+                    <tr><th>Student Name</th><th>Email</th><th>Course Code</th><th>Status</th><th>Date</th></tr>
+                </thead>
+                <tbody id="enrollments-list"></tbody>
+            </table>
+        </div>
+        
+    </div>
+</div>
+
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">Assign Instructor</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="assign-schedule-id">
+        <div class="mb-3">
+            <label class="form-label">Select Instructor</label>
+            <select class="form-select" id="instructor-select">
+                </select>
+        </div>
+        <button class="btn btn-success w-100" onclick="submitAssignment()">Save Assignment</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // --- MANAGE COURSES LOGIC ---
+    async function loadAdminCourses() {
+        const response = await fetch('/api/admin/courses', { headers: { 'Authorization': `Bearer ${token}` } });
+        const courses = await response.json();
+        const tbody = document.getElementById('admin-course-list');
+        tbody.innerHTML = '';
+        
+        courses.forEach(c => {
+            const instructorName = c.instructor_email ? c.instructor_email : '<span class="text-danger">Unassigned</span>';
+            tbody.innerHTML += `
+                <tr>
+                    <td>${c.code}</td>
+                    <td>${c.title}</td>
+                    <td>${instructorName}</td>
+                    <td>${c.enrolled_count} / ${c.capacity}</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="openAssignModal(${c.schedule_id})">Assign Inst.</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteCourse(${c.course_id})">Delete</button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    document.getElementById('addCourseForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            code: document.getElementById('code').value, title: document.getElementById('title').value,
+            credits: document.getElementById('credits').value, capacity: document.getElementById('capacity').value,
+            semester: document.getElementById('semester').value, days: document.getElementById('days').value,
+            start_time: document.getElementById('start_time').value, end_time: document.getElementById('end_time').value
+        };
+        const response = await fetch('/api/admin/courses', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload)
+        });
+        if (response.ok) { document.getElementById('addCourseForm').reset(); loadAdminCourses(); showAlert("Course added!", "success"); }
+        else { const data = await response.json(); showAlert(data.error, "danger"); }
+    });
+
+    async function deleteCourse(courseId) {
+        if (!confirm("Are you sure you want to delete this course?")) return;
+        const response = await fetch(`/api/admin/courses/${courseId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (response.ok) { loadAdminCourses(); showAlert("Course deleted.", "warning"); }
+        else { const data = await response.json(); showAlert(data.error, "danger"); }
+    }
+
+    // --- ASSIGN INSTRUCTOR LOGIC ---
+    async function openAssignModal(scheduleId) {
+        document.getElementById('assign-schedule-id').value = scheduleId;
+        const response = await fetch('/api/admin/instructors', { headers: { 'Authorization': `Bearer ${token}` } });
+        const instructors = await response.json();
+        
+        const select = document.getElementById('instructor-select');
+        select.innerHTML = '<option value="">-- Choose Instructor --</option>';
+        instructors.forEach(inst => {
+            select.innerHTML += `<option value="${inst.instructor_id}">${inst.title} (${inst.email})</option>`;
+        });
+
+        const modal = new bootstrap.Modal(document.getElementById('assignModal'));
+        modal.show();
+    }
+
+    async function submitAssignment() {
+        const scheduleId = document.getElementById('assign-schedule-id').value;
+        const instructorId = document.getElementById('instructor-select').value;
+        if (!instructorId) return alert("Please select an instructor.");
+
+        const response = await fetch(`/api/admin/courses/${scheduleId}/instructor`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ instructor_id: instructorId })
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('assignModal')).hide();
+            loadAdminCourses();
+            showAlert("Instructor assigned successfully!", "success");
+        } else {
+            showAlert("Failed to assign instructor.", "danger");
+        }
+    }
+
+    // --- MANAGE INSTRUCTORS LOGIC ---
+    async function loadInstructorsList() {
+        const response = await fetch('/api/admin/instructors', { headers: { 'Authorization': `Bearer ${token}` } });
+        const instructors = await response.json();
+        const tbody = document.getElementById('instructors-list-table');
+        tbody.innerHTML = '';
+
+        instructors.forEach(inst => {
+            tbody.innerHTML += `<tr><td><strong>${inst.title}</strong></td><td>${inst.email}</td><td><span class="badge bg-secondary">ID: ${inst.instructor_id}</span></td></tr>`;
+        });
+    }
+
+    document.getElementById('addInstructorForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            title: document.getElementById('inst-title').value,
+            email: document.getElementById('inst-email').value,
+            password: document.getElementById('inst-password').value
+        };
+        const response = await fetch('/api/admin/instructors', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            document.getElementById('addInstructorForm').reset();
+            loadInstructorsList(); 
+            showAlert("Instructor account created successfully!", "success");
+        } else {
+            const data = await response.json();
+            showAlert(data.error, "danger");
+        }
+    });
+
+    // --- ENROLLMENTS & UTILS ---
+    async function loadEnrollments() {
+        const response = await fetch('/api/admin/enrollments', { headers: { 'Authorization': `Bearer ${token}` } });
+        const enrollments = await response.json();
+        const tbody = document.getElementById('enrollments-list');
+        tbody.innerHTML = '';
+        enrollments.forEach(e => {
+            const date = new Date(e.registration_date).toLocaleDateString();
+            tbody.innerHTML += `<tr><td>${e.first_name} ${e.last_name}</td><td>${e.email}</td><td>${e.course_code}</td><td><span class="badge bg-success">${e.status}</span></td><td>${date}</td></tr>`;
+        });
+    }
+
+    function showAlert(message, type) {
+        document.getElementById('admin-alerts').innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        setTimeout(() => document.getElementById('admin-alerts').innerHTML = '', 3000);
+    }
+    
+    function logout() { localStorage.removeItem('token'); window.location.href = 'index.html'; }
+
+    // Initialize Dashboard
+    loadAdminCourses();
+</script>
+</body>
+</html>

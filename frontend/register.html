@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | ANU Registration System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="login-container">
+    <div class="login-header">
+        <h3 class="text-primary">Student Sign Up</h3>
+        <p class="text-muted">Create your university account</p>
+    </div>
+    
+    <div id="register-alert"></div>
+
+    <form id="registerForm">
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">First Name</label>
+                <input type="text" class="form-control" id="firstName" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Last Name</label>
+                <input type="text" class="form-control" id="lastName" required>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">University Email</label>
+            <input type="email" class="form-control" id="regEmail" required placeholder="name@anu.edu.eg">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="regPassword" required minlength="6">
+        </div>
+        
+        <div class="text-center mb-3">
+            <small>Already have an account? <a href="index.html">Login here</a></small>
+        </div>
+
+        <button type="submit" class="btn btn-success w-100">Create Account</button>
+    </form>
+</div>
+
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const first_name = document.getElementById('firstName').value;
+    const last_name = document.getElementById('lastName').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+    const alertBox = document.getElementById('register-alert');
+
+    try {
+        const response = await fetch('http://localhost:3000/api/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ first_name, last_name, email, password })
+        });
+        
+        const data = await response.json();
+
+        if (response.ok) {
+            alertBox.innerHTML = `<div class="alert alert-success">${data.message} Redirecting to login...</div>`;
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 2000);
+        } else {
+            alertBox.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    } catch (error) {
+        alertBox.innerHTML = `<div class="alert alert-danger">Server connection failed.</div>`;
+    }
+});
+</script>
+</body>
+</html>

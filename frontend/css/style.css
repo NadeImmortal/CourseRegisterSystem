@@ -1,0 +1,43 @@
+/* General Layout */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f7f6;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Login Page Specifics */
+.login-container {
+    max-width: 400px;
+    margin: auto;
+    margin-top: 10vh;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.login-header img {
+    width: 80px;
+    margin-bottom: 10px;
+}
+
+/* Dashboard Adjustments */
+.navbar {
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f1f5f9;
+    transition: background-color 0.3s ease;
+}
+
+/* Status Badges */
+.badge-enrolled { background-color: #198754; color: white; padding: 5px 10px; border-radius: 15px; }
+.badge-waitlist { background-color: #ffc107; color: black; padding: 5px 10px; border-radius: 15px; }
